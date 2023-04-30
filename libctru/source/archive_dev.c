@@ -101,7 +101,7 @@ typedef struct
     s32 id;
     devoptab_t device;
     FS_Archive archive;
-    char* cwd;
+    char* cwd; /*! Current working directory, excluding the final slash (for example, a value of "" equals working in "/") */
     char name[32];
 } archive_fsdevice;
 
@@ -205,7 +205,10 @@ archive_fixpath(struct _reent    *r,
     strncpy(__ctru_dev_path_buf, path, PATH_MAX);
   else
   {
+    // cwd + "/" + path
     strncpy(__ctru_dev_path_buf, dev->cwd, PATH_MAX);
+    __ctru_dev_path_buf[PATH_MAX] = '\0';
+    strncat(__ctru_dev_path_buf, "/", PATH_MAX);
     __ctru_dev_path_buf[PATH_MAX] = '\0';
     strncat(__ctru_dev_path_buf, path, PATH_MAX);
   }
@@ -305,8 +308,7 @@ static int _archiveMountDevice(FS_Archive       archive,
 
   device->setup = 1;
   device->cwd = malloc(PATH_MAX+1);
-  device->cwd[0] = '/';
-  device->cwd[1] = '\0';
+  device->cwd[0] = '\0';
 
   if (archive_device_cwd==-1)
     archive_device_cwd = device->id;
@@ -916,6 +918,7 @@ archive_chdir(struct _reent *r,
   Result  rc;
   FS_Path fs_path;
   archive_fsdevice *device = r->deviceData;
+  int     path_len;
 
   fs_path = archive_utf16path(r, name, &device);
   if(fs_path.data == NULL)
@@ -927,6 +930,12 @@ archive_chdir(struct _reent *r,
     FSDIR_Close(fd);
     strncpy(device->cwd, __ctru_dev_path_buf, PATH_MAX + 1);
     device->cwd[PATH_MAX] = '\0';
+    path_len = strlen(device->cwd);
+    // Remove trailing slash - one will be re-added in archive_fixpath.
+    if(path_len > 0 && path_len <= PATH_MAX && device->cwd[path_len - 1] == '/')
+    {
+      device->cwd[path_len - 1] = '\0';
+    }
     return 0;
   }
 
